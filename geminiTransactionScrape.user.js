@@ -93,9 +93,13 @@ function script() {
                 const amount = textRight[0].textContent.trim().replace(/,/g, '').replace("Processing", function(){processing = true; return "";});
                 var dataRow = "";
                 if (amount.slice(0, 1) != "-") {
-                    var reward_percent = textRight[1].textContent;
-                    if (textRight.length == 3) {
+                    if (textRight.length > 1) {
+                      var reward_percent = textRight[1].textContent;
+                      if (textRight.length == 3) {
                         reward_percent += " + " + textRight[2].textContent;
+                      }
+                    } else {
+                      reward_percent = 0;
                     }
                     dataRow = `${formattedDate},${merchant},,Gemini Credit,,Reward: ${reward_percent},-${amount}\n`;
                 } else {
