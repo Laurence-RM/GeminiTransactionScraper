@@ -12,34 +12,43 @@
 // @grant       GM_deleteValue
 // @grant       GM_addStyle
 // @grant       GM_addElement
-// @version     2.0
+// @version     3.0
 // @author      Laurence Mullen <github.com/laurence-rm>
 // @description Scrape transaction history for a Gemini Credit Card (all or after a certain date)
 // ==/UserScript==
 
-waitForKeyElements(".e1czpx481", script);
+waitForKeyElements(".epjqebc0", script, true);
 
 function script() {
     "use strict";
 
-    let pikadayCSS = GM_addElement('link', {rel:"stylesheet", type:"text/css", href:"https://cdn.jsdelivr.net/npm/pikaday/css/pikaday.css"});
+    // Use unique IDs to make the script idempotent
+    const DOWNLOAD_BUTTON_ID = "gemini-csv-download-button";
+    const DATE_INPUT_ID = "gemini-csv-date-input";
+    const PIKADAY_CSS_ID = "pikaday-css-stylesheet";
 
-    // Define the CSV header and initialize the data array
-    const csvHeader = "Date,Merchant,Category,Account,Original Statement,Notes,Amount\n";
-    let data = [csvHeader];
+    // --- Guard Clause: Exit if the script has already run ---
+    if (document.getElementById(DOWNLOAD_BUTTON_ID)) {
+        return;
+    }
+
+    GM_addElement('link', { id: PIKADAY_CSS_ID, rel:"stylesheet", type:"text/css", href:"https://cdn.jsdelivr.net/npm/pikaday/css/pikaday.css"});
 
     // Add a "Download CSV" button to the activity page
     const downloadButton = document.createElement("button");
+    downloadButton.id = DOWNLOAD_BUTTON_ID;
     downloadButton.innerText = "Download CSV";
     downloadButton.className = "e1fsl8uw0 css-10lg8tm e1czpx482";
-    downloadButton.style = "margin-left:70%"
+    // This pushes the button and the date input to the right side of the flex container
+    downloadButton.style.marginLeft = "auto";
 
     // add input box for pikaday date selection for starting date
     const dateInput = document.createElement('input');
     dateInput.type = "text";
-    dateInput.id = "startDate";
+    dateInput.id = DATE_INPUT_ID;
     dateInput.placeholder = "Start Date";
-    dateInput.style = "border-radius: 15px;border-style: solid;border-width: 1px;padding-left: 10px;width: 175px";
+    // Added margin-left for spacing between the button and the input
+    dateInput.style = "border-radius: 15px;border-style: solid;border-width: 1px;padding-left: 10px;width: 175px; margin-left: 12px;";
     var picker = new Pikaday({
         field: dateInput,
         maxDate: new Date(),
@@ -55,10 +64,14 @@ function script() {
     });
 
     downloadButton.addEventListener("click", () => {
+        // Define the CSV header and initialize the data array inside the handler
+        // This ensures the data is fresh for every download.
+        const csvHeader = "Date,Merchant,Category,Account,Original Statement,Notes,Amount\n";
+        const data = [csvHeader];
         const startDate = picker.getDate();
 
         // Scrape each row from the transaction table and add it to the data array
-        var transactionList = document.getElementsByTagName("table")[0];
+        const transactionList = document.getElementsByTagName("table")[0];
         const transactionRows = transactionList.querySelectorAll("tbody tr");
 
         transactionRows.forEach((row) => {
@@ -66,20 +79,26 @@ function script() {
             const textLeft = columns[0].querySelectorAll("p");
             const textRight = columns[1].querySelectorAll("p, strong");
 
-            // Date processing
-            var dateText = textLeft[1].textContent.trim()
+            let processing = false;
 
-            var date = null;
-            if (dateText.slice(-3) == "ago") {
+            // Date processing
+            const dateText = textLeft[1].textContent.trim();
+            const dateRe = /^[A-Z][a-z]+ \d+, \d+$/g
+            let date = null;
+            if (dateText.endsWith("ago")) {
                 date = new Date();
-                date.setDate(date.getDate() - Number(dateText[0]));
+                const daysAgo = parseInt(dateText, 10);
+                if (!isNaN(daysAgo)) date.setDate(date.getDate() - daysAgo);
             } else if (dateText == "Today") {
                 date = new Date();
-            } else {
+            } else if (RegExp(dateRe).test(dateText)){
                 // if in Month day, year format
                 date = new Date(dateText);
+            } else {
+                // Pending transaction
+                date = new Date();
+                processing = true;
             }
-
             // Check if date is after startDate
             if (startDate && date >= startDate) {
                 const year = date.getFullYear();
@@ -89,21 +108,36 @@ function script() {
 
                 // Other details
                 const merchant = textLeft[0].textContent.trim().replace(/\n/g, '');
-                var processing = false;
                 const amount = textRight[0].textContent.trim().replace(/,/g, '').replace("Processing", function(){processing = true; return "";});
-                var dataRow = "";
+                // Types of transactions: Purchase (+Reward), Refund (-Reward), Interest Charge, Debt Payment
+                let dataRow = `${formattedDate},"${merchant}",,Gemini Credit,,`;
                 if (amount.slice(0, 1) != "-") {
-                    var reward_percent = textRight[1].textContent;
-                    if (textRight.length == 3) {
-                        reward_percent += " + " + textRight[2].textContent;
+                    if (textRight.length >= 2) {
+                        // Purchase w/ reward
+                        let reward_percent = textRight[1].textContent + ' Reward';
+                        if (textRight.length == 3) {
+                            // additional merchant reward
+                            reward_percent += " + " + textRight[2].textContent + ' Merchant Reward';
+                        }
+                        dataRow += `${reward_percent},-${amount}\n`;
+                    } else {
+                        // Interest charge
+                        dataRow += `Interest Charge,-${amount}\n`;
                     }
-                    dataRow = `${formattedDate},${merchant},,Gemini Credit,,Reward: ${reward_percent},-${amount}\n`;
                 } else {
-                    dataRow = `${formattedDate},${merchant},,Gemini Credit,,Debt payment,${amount.slice(1)}\n`;
+                    if (merchant == "Card Payment") {
+                        // Debt Payment
+                        dataRow += `Debt payment,${amount.slice(1)}\n`;
+                    } else {
+                        // Refund
+                        dataRow += `Refund,${amount.slice(1)}\n`;
+                    }
                 }
                 if (!processing) {
                     data.push(dataRow);
                     console.log(dataRow);
+                } else {
+                    console.log("Pending: " + dataRow + "")
                 }
             }
         });
@@ -114,21 +148,15 @@ function script() {
         const csvBlob = new Blob([csvData], {
             type: "text/csv;charset=utf-8;",
         });
-        const csvUrl = URL.createObjectURL(csvBlob);
-        var timestamp = new Date().toISOString().replace(/:/g, "-").slice(0,10);
+        const timestamp = new Date().toISOString().replace(/:/g, "-").slice(0,10);
         const fileName = "gemini_credit_transactions_" + ((startDate) ? picker.toString() +"_to_": "") + timestamp + ".csv";
-        //GM_download(csvUrl, fileName);
-        const downloadLink = document.createElement("a");
-        downloadLink.href = csvUrl;
-        downloadLink.download = fileName;
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        document.body.removeChild(downloadLink);
-        // Reset the data array
-        data = [];
+
+        // Use GM_download for a cleaner download experience in supported script managers
+        GM_download(URL.createObjectURL(csvBlob), fileName);
     });
+
+    document.querySelector(".css-1cuvbbb").getElementsByTagName("button")[1].style = "margin-left: 12px;"
+    document.querySelector(".css-1cuvbbb").getElementsByTagName("button")[1].innerText = "Annual Export"
     document.querySelector(".css-1cuvbbb").appendChild(downloadButton);
     document.querySelector(".css-1cuvbbb").appendChild(dateInput);
-
-    return false;
 }
