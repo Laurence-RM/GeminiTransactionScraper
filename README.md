@@ -1,10 +1,18 @@
 # GeminiTransactionScraper
 A userscript to scrape transactions from Gemini's Credit Card Transaction History.
 
-Created before they added their own csv download feature (year by year only).
+It improves on the existing export feature by allowing you to export your entire history in a single click, or only transactions after a specific date.
 
-This script will scrape your entire transaction history and create a CSV formatted to work with Monarch.
+This script will scrape your entire transaction history and create a CSV formatted to work with Monarch Money.
 
-### Updated 4/1/24
- - Added support for new transaction page
- - Can now select the starting date to pull transactions from using date picker or input box
+### Caveats
+ - Will not scrape category (requires opening each modal - may add option in future verison)
+ - On Monarch, make sure to enable "Adjust account's balances based on these transactions" when importing the CSV.
+
+## V3.0 Release 7/25/25
+ - Fixed Button/Date Picker Styling
+ - Fixed Interest Charge Error
+ - Now properly ensures script only runs once on transaction page load
+ - Logic and parsing improvements
+ - Cleaner CSV download logic
+ - Modified default Export text
