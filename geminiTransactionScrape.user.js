@@ -125,7 +125,7 @@ function script() {
                         dataRow += `Interest Charge,-${amount}\n`;
                     }
                 } else {
-                    if (merchant == "Card Payment") {
+                    if (merchant.toLowerCase() == "card payment") {
                         // Debt Payment
                         dataRow += `Debt payment,${amount.slice(1)}\n`;
                     } else {
