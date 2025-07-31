@@ -12,7 +12,7 @@
 // @grant       GM_deleteValue
 // @grant       GM_addStyle
 // @grant       GM_addElement
-// @version     3.0
+// @version     3.1
 // @author      Laurence Mullen <github.com/laurence-rm>
 // @description Scrape transaction history for a Gemini Credit Card (all or after a certain date)
 // ==/UserScript==
